@@ -1,0 +1,16 @@
+{
+  "name": "vite-jsx",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.8",
+    "vitest": "^1.2.0"
+  }
+}
