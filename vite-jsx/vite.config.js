@@ -2,5 +2,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   test: {},
-  esbuild: {}
+  esbuild: {},
+  server: {
+    port: 8000
+  }
 })
