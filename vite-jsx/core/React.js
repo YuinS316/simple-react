@@ -38,7 +38,7 @@ function createElement(type, props = {}, ...children) {
 
 //* ==========  任务调度 ==========
 
-//  下一个工作单元
+//  下一个工作单元 (fiber结构)
 let nextUnitOfWork = null;
 
 //  开启任务调度
@@ -76,7 +76,7 @@ function workLoop(deadline) {
 }
 
 /**
- * 执行当前工作单元的工作
+ * 执行当前工作单元的工作 (就是一个个的任务)
  * @param {*} fiber 
  * @returns 
  */
