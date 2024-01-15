@@ -30,7 +30,8 @@ function createElement(type, props = {}, ...children) {
     props: {
       ...props,
       children: children.map((child) => {
-        return typeof child === "string" ? createTextNode(child) : child;
+        const isTextNode = ["string", "number"].includes(typeof child);
+        return isTextNode ? createTextNode(child) : child;
       }),
     },
   };
@@ -97,20 +98,33 @@ function commitWork(fiber) {
   if (!fiber) {
     return;
   }
-  fiber.parent.dom.append(fiber.dom);
+
+  //  fix：此时组件不具备dom，所以要向上找他的父节点的dom
+  //  fiber.parent.dom.append(fiber.dom);
+
+  let fiberParent = fiber.parent;
+  while (!fiberParent.dom) {
+    fiberParent = fiberParent.parent;
+  }
+  if (fiber.dom) {
+    fiberParent.dom.append(fiber.dom);
+  }
+
   commitWork(fiber.child);
   commitWork(fiber.sibling);
 }
 
 //* ========== 统一提交 ==========
 
-/**
- * 执行当前工作单元的工作 (就是一个个的任务)
- * @param {*} fiber
- * @returns
- */
-function performUnitOfWork(fiber) {
-  //  没有dom的时候再创建，避免处理根节点
+function updateFunctionComponent(fiber) {
+  //  组件的type调用后是一个vdom对象
+  const children = [fiber.type(fiber.props)];
+
+  //  转换指针
+  initChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
   if (!fiber.dom) {
     const dom = createDom(fiber.type);
 
@@ -121,19 +135,42 @@ function performUnitOfWork(fiber) {
     updateProps(dom, fiber.props);
   }
 
+  //  组件的type调用后是一个vdom对象
+  const children = fiber.props.children;
+
   //  转换指针
-  initChildren(fiber);
+  initChildren(fiber, children);
+}
+
+/**
+ * 执行当前工作单元的工作 (就是一个个的任务)
+ * @param {*} fiber
+ * @returns
+ */
+function performUnitOfWork(fiber) {
+
+  const isFunctionComponent = typeof fiber.type === 'function';
+
+  if (isFunctionComponent) {
+    updateFunctionComponent(fiber)
+  } else {
+    updateHostComponent(fiber);
+  }
 
   //  返回下一个要处理的指针
   if (fiber.child) {
     return fiber.child;
   }
 
-  if (fiber.sibling) {
-    return fiber.sibling;
-  }
+  let prevFiber = fiber;
 
-  return fiber.parent?.sibling;
+  //  fix: 应该一直往上找，找到上层最近的兄弟节点
+  while (prevFiber) {
+    if (prevFiber.sibling) {
+      return prevFiber.sibling;
+    }
+    prevFiber = prevFiber.parent;
+  }
 }
 
 function createDom(type) {
@@ -150,9 +187,10 @@ function updateProps(dom, props) {
   });
 }
 
-function initChildren(fiber) {
+function initChildren(fiber, children) {
   let prevFiber = null;
-  fiber.props.children.forEach((child, index) => {
+  children.forEach((child, index) => {
+
     const nextFiber = {
       type: child.type,
       props: child.props,
@@ -168,7 +206,7 @@ function initChildren(fiber) {
       prevFiber.sibling = nextFiber;
     }
 
-    prevFiber = child;
+    prevFiber = nextFiber;
   });
 }
 
