@@ -41,6 +41,9 @@ function createElement(type, props = {}, ...children) {
 //  下一个工作单元 (fiber结构)
 let nextUnitOfWork = null;
 
+//  记录根fiber，此时的fiber与初始的nextUnitOfWork相同
+let root = null;
+
 //  开启任务调度
 requestIdleCallback(workLoop);
 
@@ -55,7 +58,11 @@ function render(node, container) {
     props: {
       children: [node],
     },
+    child: null,
+    sibling: null,
   };
+
+  root = nextUnitOfWork;
 }
 
 //  任务调度
@@ -71,14 +78,36 @@ function workLoop(deadline) {
     shouldYield = deadline.timeRemaining() < 1;
   }
 
+  //  如果此时没任务了，说明任务已经执行完毕，再一次性挂载dom
+  if (!nextUnitOfWork && root) {
+    commitRoot();
+  }
+
   //  任务放到下次执行
   requestIdleCallback(workLoop);
 }
 
+//* ========== 统一提交 ==========
+function commitRoot() {
+  commitWork(root.child);
+  root = null;
+}
+
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+  fiber.parent.dom.append(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
+
+//* ========== 统一提交 ==========
+
 /**
  * 执行当前工作单元的工作 (就是一个个的任务)
- * @param {*} fiber 
- * @returns 
+ * @param {*} fiber
+ * @returns
  */
 function performUnitOfWork(fiber) {
   //  没有dom的时候再创建，避免处理根节点
@@ -86,13 +115,14 @@ function performUnitOfWork(fiber) {
     const dom = createDom(fiber.type);
 
     fiber.dom = dom;
-    fiber.parent.dom.append(dom);
+    //  后置挂载dom
+    // fiber.parent.dom.append(dom);
 
     updateProps(dom, fiber.props);
   }
 
   //  转换指针
-  initChildren(fiber)
+  initChildren(fiber);
 
   //  返回下一个要处理的指针
   if (fiber.child) {
@@ -105,7 +135,6 @@ function performUnitOfWork(fiber) {
 
   return fiber.parent?.sibling;
 }
-
 
 function createDom(type) {
   return type === NODE_TYPE.text
