@@ -1,7 +1,19 @@
 import React from "./core/React.js";
 
-function Count({ count }) {
-  return <div>test - Count: {count}</div>;
+let sum = 1;
+let props = { id: "count" };
+export function Count({ count }) {
+  function handleClick() {
+    console.log("click");
+    sum++;
+    props = {};
+    React.update();
+  }
+  return (
+    <div {...props} onClick={handleClick}>
+      test - Count: {count}; test - Sum: {sum}
+    </div>
+  );
 }
 
 function CountContaner() {
@@ -13,7 +25,7 @@ function App() {
     <div id="app">
       app-test
       <Count count={10}></Count>
-      <Count count={20}></Count>
+      {/* <Count count={20}></Count> */}
     </div>
   );
 }

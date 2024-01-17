@@ -2,6 +2,11 @@ const NODE_TYPE = {
   text: "TEXT_ELEMENT",
 };
 
+const EFFECT_TYPE = {
+  new: "PLACEMENT",
+  update: "UPDATE"
+}
+
 /**
  * 创建文本节点的虚拟节点
  * @param {string} text
@@ -43,7 +48,11 @@ function createElement(type, props = {}, ...children) {
 let nextUnitOfWork = null;
 
 //  记录根fiber，此时的fiber与初始的nextUnitOfWork相同
-let root = null;
+//  work in progress root  正在工作中的根节点
+let wipRoot = null;
+
+//  记录初始化后的root（commitRoot是赋值）
+let currentRoot = null;
 
 //  开启任务调度
 requestIdleCallback(workLoop);
@@ -54,7 +63,7 @@ requestIdleCallback(workLoop);
  * @param {*} container  真实节点
  */
 function render(node, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [node],
@@ -63,7 +72,7 @@ function render(node, container) {
     sibling: null,
   };
 
-  root = nextUnitOfWork;
+  nextUnitOfWork = wipRoot;
 }
 
 //  任务调度
@@ -80,7 +89,7 @@ function workLoop(deadline) {
   }
 
   //  如果此时没任务了，说明任务已经执行完毕，再一次性挂载dom
-  if (!nextUnitOfWork && root) {
+  if (!nextUnitOfWork && wipRoot) {
     commitRoot();
   }
 
@@ -90,8 +99,9 @@ function workLoop(deadline) {
 
 //* ========== 统一提交 ==========
 function commitRoot() {
-  commitWork(root.child);
-  root = null;
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null;
 }
 
 function commitWork(fiber) {
@@ -106,8 +116,15 @@ function commitWork(fiber) {
   while (!fiberParent.dom) {
     fiberParent = fiberParent.parent;
   }
-  if (fiber.dom) {
-    fiberParent.dom.append(fiber.dom);
+
+  if (fiber.efffectTag === EFFECT_TYPE.update) {
+    if (fiber.dom) {
+      updateProps(fiber.dom, fiber.props, fiber?.alternate?.props)
+    }
+  } else if (fiber.efffectTag === EFFECT_TYPE.new) {
+    if (fiber.dom) {
+      fiberParent.dom.append(fiber.dom);
+    }
   }
 
   commitWork(fiber.child);
@@ -121,7 +138,7 @@ function updateFunctionComponent(fiber) {
   const children = [fiber.type(fiber.props)];
 
   //  转换指针
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 function updateHostComponent(fiber) {
@@ -139,7 +156,7 @@ function updateHostComponent(fiber) {
   const children = fiber.props.children;
 
   //  转换指针
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 /**
@@ -179,26 +196,93 @@ function createDom(type) {
     : document.createElement(type);
 }
 
-function updateProps(dom, props) {
-  Object.keys(props).forEach((key) => {
-    if (key !== "children") {
-      dom[key] = props[key];
+function updateProps(dom, nextProps, prevProps = {}) {
+
+  //  旧的有，新的也有，覆盖
+  Object.keys(nextProps).forEach((key) => {
+
+    if (prevProps[key]) {
+      if (key !== "children") {
+        if (key.startsWith('on')) {
+          const event = key.slice(2).toLocaleLowerCase();
+          dom.removeEventListener(event, prevProps[key]);
+          dom.addEventListener(event, nextProps[key])
+        } else {
+          dom[key] = nextProps[key];
+        }
+      }
     }
   });
+
+  //  新的有，旧的没有，挂载
+  Object.keys(nextProps).forEach((key) => {
+    if (!prevProps[key]) {
+      if (key !== "children") {
+        if (key.startsWith('on')) {
+          const event = key.slice(2).toLocaleLowerCase();
+          dom.addEventListener(event, nextProps[key])
+        } else {
+          dom[key] = nextProps[key];
+        }
+      }
+    }
+  });
+
+  //  旧的有，新的没有，移除
+  Object.keys(prevProps).forEach(key => {
+    if (!nextProps[key]) {
+      if (key !== "children") {
+        if (key.startsWith('on')) {
+          const event = key.slice(2).toLocaleLowerCase();
+          dom.removeEventListener(event, prevProps[key])
+        } else {
+          // dom[key] = nextProps[key];
+          dom.removeAttribute(key);
+        }
+      }
+    }
+  })
 }
 
-function initChildren(fiber, children) {
+
+function reconcileChildren(fiber, children) {
+
+  //  更新前的fiber
+  let oldFiber = fiber?.alternate?.child;
+
+  //  遍历时候的上一个fiber，用于构建sibling
   let prevFiber = null;
   children.forEach((child, index) => {
 
-    const nextFiber = {
-      type: child.type,
-      props: child.props,
-      child: null,
-      parent: fiber,
-      sibling: null,
-      dom: null,
-    };
+    //  更新前后是否标签的类型一致
+    const isSameType = oldFiber && oldFiber.type === child.type;
+
+    let nextFiber;
+    if (isSameType) {
+      //  更新fiber
+      nextFiber = {
+        type: child.type,
+        props: child.props,
+        child: null,
+        parent: fiber,
+        sibling: null,
+        dom: oldFiber.dom,
+        alternate: oldFiber,
+        efffectTag: EFFECT_TYPE.update
+      };
+    } else {
+      //  新建fiber
+      nextFiber = {
+        type: child.type,
+        props: child.props,
+        child: null,
+        parent: fiber,
+        sibling: null,
+        dom: null,
+        alternate: null,
+        efffectTag: EFFECT_TYPE.new
+      };
+    }
 
     if (index === 0) {
       fiber.child = nextFiber;
@@ -207,7 +291,25 @@ function initChildren(fiber, children) {
     }
 
     prevFiber = nextFiber;
+
+    //  移动老的fiber
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
   });
+}
+
+/**
+ * 更新函数
+ */
+function update() {
+  wipRoot = {
+    dom: currentRoot.dom,
+    props: currentRoot.props,
+    alternate: currentRoot
+  };
+
+  nextUnitOfWork = wipRoot;
 }
 
 //* ==========  任务调度 ==========
@@ -215,4 +317,5 @@ function initChildren(fiber, children) {
 export default {
   render,
   createElement,
+  update,
 };

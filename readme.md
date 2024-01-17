@@ -65,3 +65,31 @@ jsx 会解析成 `type: function App() {}` 这种形式
 所以要递归的往上找一个有 `dom` 的节点（不可能为空，根节点必定有真实的`dom`。
 
 同时修复了一个挂载 dom 的 bug，在找处理完子节点和兄弟节点后，必须要递归向上的找到最近的叔叔节点。此前只向上找了一步，导致在多节点的情况下渲染不完整。
+
+### Update
+
+react 中如何找到修改后的节点？
+
+fiber 结构中有 alternate 这个属性，他主要是在 update 的时候，指向旧 fiber 中的对应的节点。这样就可以高效的找到对应的节点。
+
+```
+    旧的fiber                新的fiber
+      a   <- alternate        a
+    /   \                  /    \
+   b  -> c                b  ->  c
+```
+
+a.alternate.child 即可获取到旧 fiber 的 child，记为 oldFiber
+再通过 oldFiber.sibling 即可获取到兄弟节点
+
+可以看到，通过 alternate 轻易的将新旧 fiber 联系起来
+
+过程：
+
+在 commitRoot 结束后，我们需要记录当前的根 fiber 到 currentRoot;
+
+然后从 currentRoot 新建一个 fiber，同时不要忘记设置 dom，和 alternate；
+
+然后到 performUnitOfWork，处理 reconcileChildren 的时候，需要添加额外的操作，需要标记当前的 fiber 是新建还是更新，然后更新 fiber;
+
+最后，在 commitWork 的时候根据 fiber 是新建还是更新，决定是 append 还是 updateProps 即可。
