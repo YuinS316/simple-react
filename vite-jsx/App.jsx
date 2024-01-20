@@ -1,4 +1,7 @@
 import React from "./core/React.js";
+import DeleteExample from "./DeleteExample.jsx";
+import EdgeCase from "./EdgeCase.jsx";
+import DecreaseUpdate from "./DecreaseUpdate.jsx";
 
 let sum = 1;
 let props = { id: "count" };
@@ -20,12 +23,22 @@ function CountContaner() {
   return <Count count={1}></Count>;
 }
 
+// function App() {
+//   return (
+//     <div id="app">
+//       app-test
+//       <Count count={10}></Count>
+//       {/* <Count count={20}></Count> */}
+//     </div>
+//   );
+// }
+
 function App() {
   return (
     <div id="app">
-      app-test
-      <Count count={10}></Count>
-      {/* <Count count={20}></Count> */}
+      {/* <DeleteExample></DeleteExample> */}
+      {/* <EdgeCase></EdgeCase> */}
+      <DecreaseUpdate></DecreaseUpdate>
     </div>
   );
 }

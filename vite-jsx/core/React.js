@@ -4,8 +4,8 @@ const NODE_TYPE = {
 
 const EFFECT_TYPE = {
   new: "PLACEMENT",
-  update: "UPDATE"
-}
+  update: "UPDATE",
+};
 
 /**
  * 创建文本节点的虚拟节点
@@ -51,8 +51,14 @@ let nextUnitOfWork = null;
 //  work in progress root  正在工作中的根节点
 let wipRoot = null;
 
+//  当前工作中的fc fiber
+let wipFiber = null;
+
 //  记录初始化后的root（commitRoot是赋值）
 let currentRoot = null;
+
+//  需要删除的dom，统一删除
+let deletions = [];
 
 //  开启任务调度
 requestIdleCallback(workLoop);
@@ -84,6 +90,11 @@ function workLoop(deadline) {
     //  run task
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
 
+    //  组件的更新，从自身fiber开始，到遇到他的兄弟节点结束
+    if (wipRoot?.sibling?.type === nextUnitOfWork?.type) {
+      nextUnitOfWork = null;
+    }
+
     //  如果浏览器剩余的空闲时间不够，就中断
     shouldYield = deadline.timeRemaining() < 1;
   }
@@ -99,9 +110,32 @@ function workLoop(deadline) {
 
 //* ========== 统一提交 ==========
 function commitRoot() {
+  commitDeletion();
   commitWork(wipRoot.child);
   currentRoot = wipRoot;
   wipRoot = null;
+
+  deletions = [];
+}
+
+function commitDeletion() {
+  deletions.forEach((fiber) => {
+    // fiber.parent.dom.removeChild(fiber.dom);
+
+    //  向上一直找到有dom的父fiber
+    let fiberParent = fiber.parent;
+    while (!fiberParent.dom) {
+      fiberParent = fiberParent.parent;
+    }
+
+    //  向下找到有dom的子fiber
+    let fiberChild = fiber;
+    while (!fiberChild.dom) {
+      fiberChild = fiberChild.child;
+    }
+
+    fiberParent.dom.removeChild(fiberChild.dom);
+  });
 }
 
 function commitWork(fiber) {
@@ -119,7 +153,7 @@ function commitWork(fiber) {
 
   if (fiber.efffectTag === EFFECT_TYPE.update) {
     if (fiber.dom) {
-      updateProps(fiber.dom, fiber.props, fiber?.alternate?.props)
+      updateProps(fiber.dom, fiber.props, fiber?.alternate?.props);
     }
   } else if (fiber.efffectTag === EFFECT_TYPE.new) {
     if (fiber.dom) {
@@ -134,6 +168,9 @@ function commitWork(fiber) {
 //* ========== 统一提交 ==========
 
 function updateFunctionComponent(fiber) {
+  //  每次处理fc的时候记录当前fiber，通过闭包记录起来
+  wipFiber = fiber;
+
   //  组件的type调用后是一个vdom对象
   const children = [fiber.type(fiber.props)];
 
@@ -165,11 +202,10 @@ function updateHostComponent(fiber) {
  * @returns
  */
 function performUnitOfWork(fiber) {
-
-  const isFunctionComponent = typeof fiber.type === 'function';
+  const isFunctionComponent = typeof fiber.type === "function";
 
   if (isFunctionComponent) {
-    updateFunctionComponent(fiber)
+    updateFunctionComponent(fiber);
   } else {
     updateHostComponent(fiber);
   }
@@ -197,63 +233,42 @@ function createDom(type) {
 }
 
 function updateProps(dom, nextProps, prevProps = {}) {
-
-  //  旧的有，新的也有，覆盖
+  //  新的也有，旧的有，覆盖
   Object.keys(nextProps).forEach((key) => {
-
-    if (prevProps[key]) {
-      if (key !== "children") {
-        if (key.startsWith('on')) {
-          const event = key.slice(2).toLocaleLowerCase();
-          dom.removeEventListener(event, prevProps[key]);
-          dom.addEventListener(event, nextProps[key])
-        } else {
-          dom[key] = nextProps[key];
-        }
-      }
-    }
-  });
-
-  //  新的有，旧的没有，挂载
-  Object.keys(nextProps).forEach((key) => {
-    if (!prevProps[key]) {
-      if (key !== "children") {
-        if (key.startsWith('on')) {
-          const event = key.slice(2).toLocaleLowerCase();
-          dom.addEventListener(event, nextProps[key])
-        } else {
-          dom[key] = nextProps[key];
-        }
+    if (key !== "children") {
+      if (key.startsWith("on")) {
+        const event = key.slice(2).toLocaleLowerCase();
+        dom.removeEventListener(event, prevProps[key]);
+        dom.addEventListener(event, nextProps[key]);
+      } else {
+        dom[key] = nextProps[key];
       }
     }
   });
 
   //  旧的有，新的没有，移除
-  Object.keys(prevProps).forEach(key => {
+  Object.keys(prevProps).forEach((key) => {
     if (!nextProps[key]) {
       if (key !== "children") {
-        if (key.startsWith('on')) {
+        if (key.startsWith("on")) {
           const event = key.slice(2).toLocaleLowerCase();
-          dom.removeEventListener(event, prevProps[key])
+          dom.removeEventListener(event, prevProps[key]);
         } else {
           // dom[key] = nextProps[key];
           dom.removeAttribute(key);
         }
       }
     }
-  })
+  });
 }
 
-
 function reconcileChildren(fiber, children) {
-
   //  更新前的fiber
   let oldFiber = fiber?.alternate?.child;
 
   //  遍历时候的上一个fiber，用于构建sibling
   let prevFiber = null;
   children.forEach((child, index) => {
-
     //  更新前后是否标签的类型一致
     const isSameType = oldFiber && oldFiber.type === child.type;
 
@@ -268,20 +283,29 @@ function reconcileChildren(fiber, children) {
         sibling: null,
         dom: oldFiber.dom,
         alternate: oldFiber,
-        efffectTag: EFFECT_TYPE.update
+        efffectTag: EFFECT_TYPE.update,
       };
     } else {
-      //  新建fiber
-      nextFiber = {
-        type: child.type,
-        props: child.props,
-        child: null,
-        parent: fiber,
-        sibling: null,
-        dom: null,
-        alternate: null,
-        efffectTag: EFFECT_TYPE.new
-      };
+      //  edgeCase:  false && <div></div>
+      //  此时解析出来的child是false
+      if (child) {
+        //  新建fiber
+        nextFiber = {
+          type: child.type,
+          props: child.props,
+          child: null,
+          parent: fiber,
+          sibling: null,
+          dom: null,
+          alternate: null,
+          efffectTag: EFFECT_TYPE.new,
+        };
+      }
+
+      //  移除老节点
+      if (oldFiber) {
+        deletions.push(oldFiber);
+      }
     }
 
     if (index === 0) {
@@ -290,26 +314,37 @@ function reconcileChildren(fiber, children) {
       prevFiber.sibling = nextFiber;
     }
 
-    prevFiber = nextFiber;
+    //  edgeCase: {false && <div></div>} => nextFiber = undefined;
+    if (nextFiber) {
+      prevFiber = nextFiber;
+    }
 
     //  移动老的fiber
     if (oldFiber) {
       oldFiber = oldFiber.sibling;
     }
   });
+
+  //  说明旧节点比新节点多，需要移除
+  while (oldFiber) {
+    deletions.push(oldFiber);
+    oldFiber = oldFiber.sibling;
+  }
 }
 
 /**
  * 更新函数
  */
 function update() {
-  wipRoot = {
-    dom: currentRoot.dom,
-    props: currentRoot.props,
-    alternate: currentRoot
-  };
+  let currentFiber = wipFiber;
 
-  nextUnitOfWork = wipRoot;
+  return () => {
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    };
+    nextUnitOfWork = wipRoot;
+  };
 }
 
 //* ==========  任务调度 ==========
