@@ -2,6 +2,7 @@ import React from "./core/React.js";
 import DeleteExample from "./DeleteExample.jsx";
 import EdgeCase from "./EdgeCase.jsx";
 import DecreaseUpdate from "./DecreaseUpdate.jsx";
+import StateHook from "./StateHook.jsx";
 
 let sum = 1;
 let props = { id: "count" };
@@ -38,7 +39,8 @@ function App() {
     <div id="app">
       {/* <DeleteExample></DeleteExample> */}
       {/* <EdgeCase></EdgeCase> */}
-      <DecreaseUpdate></DecreaseUpdate>
+      {/* <DecreaseUpdate></DecreaseUpdate> */}
+      <StateHook></StateHook>
     </div>
   );
 }

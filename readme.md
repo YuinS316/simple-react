@@ -93,3 +93,18 @@ a.alternate.child 即可获取到旧 fiber 的 child，记为 oldFiber
 然后到 performUnitOfWork，处理 reconcileChildren 的时候，需要添加额外的操作，需要标记当前的 fiber 是新建还是更新，然后更新 fiber;
 
 最后，在 commitWork 的时候根据 fiber 是新建还是更新，决定是 append 还是 updateProps 即可。
+
+### hooks
+
+react 中，hook 是存在于 fiber 节点中的，并且 fiber 是用数组的形式存储 hook。
+
+所以有一道经典的面试题：为什么 hook 不能写在判断语句 或者在函数内部执行？ 这就是答案。
+
+因为 hooks 必须按顺序执行，不然无法保证结果。
+
+### useState
+
+为什么组件通过 useState 可以拥有状态，更新的时候组件不是会重新执行吗？
+
+因为 useState 把当前组件的状态记录到 fiber 中，通过 setState 更新组件的时候，他会通过 alternate 获取到旧的 hook 的状态，
+然后在通过存储了调用 setState 的队列来计算出最新的 state 值，再返回出去，这样就达到了目的。

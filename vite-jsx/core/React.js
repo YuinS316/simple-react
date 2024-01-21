@@ -171,6 +171,9 @@ function updateFunctionComponent(fiber) {
   //  每次处理fc的时候记录当前fiber，通过闭包记录起来
   wipFiber = fiber;
 
+  stateHooks = [];
+  stateHookIndex = 0;
+
   //  组件的type调用后是一个vdom对象
   const children = [fiber.type(fiber.props)];
 
@@ -339,18 +342,71 @@ function update() {
   let currentFiber = wipFiber;
 
   return () => {
-    wipRoot = {
-      ...currentFiber,
-      alternate: currentFiber,
-    };
+    wipRoot = currentFiber;
+    wipRoot.alternate = currentFiber;
     nextUnitOfWork = wipRoot;
   };
 }
 
 //* ==========  任务调度 ==========
 
+//* ==========  hook ==========
+
+//  记录hook的顺序
+let stateHooks = [];
+//  记录当前执行到的hook
+let stateHookIndex = 0;
+
+function useState(initialValue) {
+  // debugger;
+  let currentFiber = wipFiber;
+
+  //  老的hook
+  const oldHook = currentFiber.alternate?.stateHooks[stateHookIndex];
+
+  let stateHook = {
+    value: oldHook ? oldHook.value : initialValue,
+    //  同一时间多次调用setState就保存起来
+    queue: oldHook ? oldHook.queue : [],
+  };
+
+  stateHook.queue.forEach((action) => {
+    stateHook.value = action(stateHook.value);
+  });
+  stateHook.queue = [];
+
+  //  把hook存到fiber上
+  stateHooks[stateHookIndex] = stateHook;
+  currentFiber.stateHooks = stateHooks;
+  stateHookIndex++;
+
+  //  action可以传入function或者值
+  const setState = (action) => {
+    //  优化点：如果action每次传入的值都与当前值一样，就不需要更新
+    const eagerValue = typeof action === "function" ? action() : action;
+    if (eagerValue === stateHook.value) {
+      return;
+    }
+
+    // stateHook.value = action(stateHook.value);
+    stateHook.queue.push(typeof action === "function" ? action : () => action);
+
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    };
+
+    nextUnitOfWork = wipRoot;
+  };
+
+  return [stateHook.value, setState];
+}
+
+//* ==========  hook ==========
+
 export default {
   render,
   createElement,
   update,
+  useState,
 };
