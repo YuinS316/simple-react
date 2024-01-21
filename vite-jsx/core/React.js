@@ -112,9 +112,9 @@ function workLoop(deadline) {
 function commitRoot() {
   commitDeletion();
   commitWork(wipRoot.child);
+  commitHooks();
   currentRoot = wipRoot;
   wipRoot = null;
-
   deletions = [];
 }
 
@@ -165,6 +165,62 @@ function commitWork(fiber) {
   commitWork(fiber.sibling);
 }
 
+//  处理useEffect
+function commitHooks() {
+  //  从根节点开始，递归向下的执行useEffect
+
+  function run(fiber) {
+    if (!fiber) {
+      return;
+    }
+
+    const oldFiber = fiber.alternate;
+
+    //  如果没有alternate，说明是初始化
+    if (!oldFiber) {
+      fiber?.effectHooks?.forEach((hook) => {
+        hook.cleanup = hook.callback();
+      });
+    } else {
+      //  说明是更新
+      const oldEffectHooks = oldFiber?.effectHooks;
+      const newEffectHooks = fiber.effectHooks;
+
+      newEffectHooks?.forEach((newEffectHook, hookIndex) => {
+        if (newEffectHook.deps.length > 0) {
+          const shouldUpdate = newEffectHook.deps.some((newDep, index) => {
+            return oldEffectHooks[hookIndex].deps[index] !== newDep;
+          });
+          if (shouldUpdate) {
+            newEffectHook.cleanup = newEffectHook.callback();
+          }
+        }
+      });
+    }
+
+    run(fiber.child);
+    run(fiber.sibling);
+  }
+
+  function runCleanup(fiber) {
+    if (!fiber) {
+      return;
+    }
+
+    const oldFiber = fiber.alternate;
+
+    oldFiber?.effectHooks?.forEach((hook) => {
+      hook.deps.length > 0 && hook.cleanup?.();
+    });
+
+    runCleanup(fiber.child);
+    runCleanup(fiber.sibling);
+  }
+
+  runCleanup(wipRoot);
+  run(wipRoot);
+}
+
 //* ========== 统一提交 ==========
 
 function updateFunctionComponent(fiber) {
@@ -173,6 +229,7 @@ function updateFunctionComponent(fiber) {
 
   stateHooks = [];
   stateHookIndex = 0;
+  effectHooks = [];
 
   //  组件的type调用后是一个vdom对象
   const children = [fiber.type(fiber.props)];
@@ -358,7 +415,6 @@ let stateHooks = [];
 let stateHookIndex = 0;
 
 function useState(initialValue) {
-  // debugger;
   let currentFiber = wipFiber;
 
   //  老的hook
@@ -402,6 +458,22 @@ function useState(initialValue) {
   return [stateHook.value, setState];
 }
 
+//  记录effectHooks
+let effectHooks = [];
+function useEffect(callback, deps) {
+  let currentFiber = wipFiber;
+
+  let effectHook = {
+    callback,
+    deps,
+    cleanup: null,
+  };
+
+  effectHooks.push(effectHook);
+
+  currentFiber.effectHooks = effectHooks;
+}
+
 //* ==========  hook ==========
 
 export default {
@@ -409,4 +481,5 @@ export default {
   createElement,
   update,
   useState,
+  useEffect,
 };

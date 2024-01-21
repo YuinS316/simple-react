@@ -108,3 +108,15 @@ react 中，hook 是存在于 fiber 节点中的，并且 fiber 是用数组的�
 
 因为 useState 把当前组件的状态记录到 fiber 中，通过 setState 更新组件的时候，他会通过 alternate 获取到旧的 hook 的状态，
 然后在通过存储了调用 setState 的队列来计算出最新的 state 值，再返回出去，这样就达到了目的。
+
+### useEffect
+
+它的执行实际是 commitRoot 内，在完成 commitWork 完成后，此时 dom 已挂载更新后执行。
+
+它的执行顺序是从根节点开始，递归向下执行。
+
+它在 fiber 中是记录 callback 和 deps，同时 callback 返回的函数会被记录到 cleanup 中。
+
+那么我们只需要遍历 effectHooks 的时候，检测每个 hook 的 deps 是否发现了改变，然后把 callback 的返回值赋值给 cleanup 即可。
+
+另外要注意的是，cleanup 是拿到 alternate 中的 cleanup 去执行，因为它是要清除上次的副作用。
