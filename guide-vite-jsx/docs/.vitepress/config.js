@@ -14,7 +14,10 @@ export default defineConfig({
     sidebar: [
       {
         text: "指引",
-        items: [{ text: "开始", link: "/start" }],
+        items: [
+          { text: "开始", link: "/start" },
+          { text: "并发模式", link: "/concurrent" },
+        ],
       },
     ],
 

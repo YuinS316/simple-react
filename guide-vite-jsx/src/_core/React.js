@@ -65,6 +65,33 @@ function render(node, container) {
   container.append(dom);
 }
 
+//  下一个工作单元 (fiber结构)
+let nextUnitOfWork = null;
+
+/**
+ * 任务调度
+ * @param {IdleDeadline} deadline
+ */
+function workLoop(deadline) {
+  let shouldYield = false;
+  while (nextUnitOfWork && !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    shouldYield = deadline.timeRemaining() < 1;
+  }
+  requestIdleCallback(workLoop);
+}
+
+requestIdleCallback(workLoop);
+
+/**
+ * 执行当前工作单元的工作 (就是一个个的任务)
+ * @param {*} fiber
+ * @returns
+ */
+function performUnitOfWork(nextUnitOfWork) {
+  // TODO
+}
+
 export default {
   render,
   createElement,
