@@ -129,7 +129,7 @@ requestIdleCallback(workLoop)
  * @param {*} fiber
  * @returns
  */
-function performUnitOfWork(nextUnitOfWork) {
+function performUnitOfWork(fiber) {
   // TODO
 }
 ```

@@ -17,6 +17,7 @@ export default defineConfig({
         items: [
           { text: "开始", link: "/start" },
           { text: "并发模式", link: "/concurrent" },
+          { text: "fiber", link: "/fiber" },
         ],
       },
     ],

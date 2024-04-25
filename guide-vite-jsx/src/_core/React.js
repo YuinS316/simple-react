@@ -37,32 +37,38 @@ function createElement(type, props = {}, ...children) {
 }
 
 /**
+ * 根据fiber
+ * @param {*} fiber
+ */
+function createDom(fiber) {
+  //  1、创建dom
+  const dom =
+    fiber.type === NODE_TYPE.text
+      ? document.createTextNode("")
+      : document.createElement(fiber.type);
+
+  //  2、处理props
+  Object.keys(fiber.props).forEach((key) => {
+    if (key !== "children") {
+      dom[key] = fiber.props[key];
+    }
+  });
+
+  return dom;
+}
+
+/**
  * 渲染函数
  * @param {any} node 虚拟节点
  * @param {*} container  真实节点
  */
 function render(node, container) {
-  //  1、创建dom
-  const dom =
-    node.type === NODE_TYPE.text
-      ? document.createTextNode("")
-      : document.createElement(node.type);
-
-  //  2、处理props
-  Object.keys(node.props).forEach((key) => {
-    if (key !== "children") {
-      dom[key] = node.props[key];
-    }
-  });
-
-  //  3、处理children
-  const children = node.props.children || [];
-  children.forEach((child) => {
-    render(child, dom);
-  });
-
-  //  4、挂载dom
-  container.append(dom);
+  nextUnitOfWork = {
+    dom: container,
+    props: {
+      children: [node],
+    },
+  };
 }
 
 //  下一个工作单元 (fiber结构)
@@ -88,8 +94,55 @@ requestIdleCallback(workLoop);
  * @param {*} fiber
  * @returns
  */
-function performUnitOfWork(nextUnitOfWork) {
-  // TODO
+function performUnitOfWork(fiber) {
+  //*  创建节点，挂载到父节点上
+  if (!fiber.dom) {
+    const dom = createDom(fiber);
+    fiber.dom = dom;
+  }
+
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom);
+  }
+  //*  按照fiber的遍历规则，将children处理成fiber
+
+  const { children = [] } = fiber.props;
+
+  //  为了构建sibling，需要知道记录上一个fiber
+  let prevFiber = null;
+
+  children.forEach((node, index) => {
+    const newFiber = {
+      type: node.type,
+      props: node.props,
+      parent: fiber,
+      dom: null,
+    };
+
+    if (index === 0) {
+      //  第一个子元素设为child
+      fiber.child = newFiber;
+    } else {
+      //  后续的与前一个构建sibling
+      prevFiber.sibling = newFiber;
+    }
+
+    prevFiber = newFiber;
+  });
+
+  //* 返回下一个要处理的fiber
+
+  //  下面的一段理解成深度优先遍历
+  if (fiber.child) {
+    return fiber.child;
+  }
+  let curFiber = fiber;
+  while (curFiber) {
+    if (curFiber.sibling) {
+      return curFiber.sibling;
+    }
+    curFiber = curFiber.parent;
+  }
 }
 
 export default {
