@@ -63,16 +63,15 @@ function createDom(fiber) {
  * @param {*} container  真实节点
  */
 function render(node, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [node],
     },
   };
-}
 
-//  下一个工作单元 (fiber结构)
-let nextUnitOfWork = null;
+  nextUnitOfWork = wipRoot;
+}
 
 /**
  * 任务调度
@@ -84,10 +83,14 @@ function workLoop(deadline) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
   }
+
+  //  判断fiber是否执行完毕，是的话执行挂载
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
+  }
+
   requestIdleCallback(workLoop);
 }
-
-requestIdleCallback(workLoop);
 
 /**
  * 执行当前工作单元的工作 (就是一个个的任务)
@@ -144,6 +147,45 @@ function performUnitOfWork(fiber) {
     curFiber = curFiber.parent;
   }
 }
+
+// ===========  统一提交处理 ===========
+
+/**
+ * 统一提交
+ */
+function commitRoot() {
+  if (wipRoot) {
+    //  为什么传child，是因为通过parent.dom就能拿到容器
+    commitWork(wipRoot.child);
+  }
+  //  处理完后置空
+  wipRoot = null;
+}
+
+/**
+ * 挂载节点
+ * @param {*} fiber
+ */
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
+
+//  =========== 全局变量 ===========
+
+//  下一个工作单元 (fiber结构)
+let nextUnitOfWork = null;
+
+//  工作中的根节点wipRoot (work in progress root)
+let wipRoot = null;
+
+requestIdleCallback(workLoop);
 
 export default {
   render,

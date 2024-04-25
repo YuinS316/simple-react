@@ -18,6 +18,7 @@ export default defineConfig({
           { text: "开始", link: "/start" },
           { text: "并发模式", link: "/concurrent" },
           { text: "fiber", link: "/fiber" },
+          { text: "统一提交", link: "/commitRoot" },
         ],
       },
     ],
