@@ -19,6 +19,7 @@ export default defineConfig({
           { text: "并发模式", link: "/concurrent" },
           { text: "fiber", link: "/fiber" },
           { text: "统一提交", link: "/commitRoot" },
+          { text: "调和", link: "/reconciliation" },
         ],
       },
     ],
