@@ -268,19 +268,12 @@ function workLoop(deadline) {
  * @returns
  */
 function performUnitOfWork(fiber) {
-  //*  创建节点，挂载到父节点上
-  if (!fiber.dom) {
-    const dom = createDom(fiber);
-    fiber.dom = dom;
-
-    updateProps(dom, fiber.props);
+  //*  判断是不是函数组件
+  if (typeof fiber.type === "function") {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostComponent(fiber);
   }
-
-  //*  按照fiber的遍历规则，将children处理成fiber
-
-  const { children = [] } = fiber.props;
-
-  reconcileChildren(fiber, children);
 
   //* 返回下一个要处理的fiber
 
@@ -295,6 +288,36 @@ function performUnitOfWork(fiber) {
     }
     curFiber = curFiber.parent;
   }
+}
+
+/**
+ * 处理虚拟dom类型的fiber
+ * @param {*} fiber
+ */
+function updateHostComponent(fiber) {
+  //*  创建节点，挂载到父节点上
+  if (!fiber.dom) {
+    const dom = createDom(fiber);
+    fiber.dom = dom;
+
+    updateProps(dom, fiber.props);
+  }
+
+  //*  按照fiber的遍历规则，将children处理成fiber
+
+  const { children = [] } = fiber.props;
+
+  reconcileChildren(fiber, children);
+}
+
+/**
+ * 处理组件类型的fiber
+ * @param {*} fiber
+ */
+function updateFunctionComponent(fiber) {
+  const children = [fiber.type(fiber.props)];
+
+  reconcileChildren(fiber, children);
 }
 
 /**
