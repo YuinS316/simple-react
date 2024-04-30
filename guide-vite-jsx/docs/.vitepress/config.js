@@ -27,7 +27,10 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/vuejs/vitepress" },
+      {
+        icon: "github",
+        link: "https://github.com/YuinS316/simple-react/tree/master/guide-vite-jsx",
+      },
     ],
   },
 });
