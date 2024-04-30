@@ -38,7 +38,7 @@ function createElement(type, props = {}, ...children) {
     props: {
       ...props,
       children: children.map((child) => {
-        return typeof child === "string" ? createTextNode(child) : child;
+        return typeof child !== "object" ? createTextNode(child) : child;
       }),
     },
   };
@@ -142,6 +142,8 @@ function commitRoot() {
     commitDeletion();
     //  为什么传child，是因为通过parent.dom就能拿到容器
     commitWork(wipRoot.child);
+    //  处理hooks
+    commitHooks();
   }
 
   //  保存fiber入口
@@ -220,6 +222,64 @@ function commitDeletion() {
   deletions.forEach((fiber) => {
     commitWork(fiber);
   });
+}
+
+function commitHooks() {
+  //  执行callback
+  const runCallback = (fiber) => {
+    if (!fiber) {
+      return;
+    }
+
+    const oldFiber = fiber?.alternate;
+
+    //  说明是首次渲染
+    if (!oldFiber) {
+      //  可能是非函数组件，先判断下
+      fiber.effectHooks?.forEach((hook) => {
+        hook.cleanup = hook.callback();
+      });
+    } else {
+      //  后续渲染
+      fiber.effectHooks?.forEach((hook, hookIndex) => {
+        //  先判断deps的长度，传入空数组则不需要执行
+        if (hook.deps?.length > 0) {
+          //  判断一下deps是否有变化
+          const shouldUpdate = hook.deps.some((newDep, depIndex) => {
+            return oldFiber.effectHooks[hookIndex].deps[depIndex] !== newDep;
+          });
+
+          if (shouldUpdate) {
+            hook.cleanup = hook.callback();
+          }
+        }
+      });
+    }
+
+    runCallback(fiber.child);
+    runCallback(fiber.sibling);
+  };
+
+  //  执行cleanup
+  const runCleanup = (fiber) => {
+    if (!fiber) {
+      return;
+    }
+
+    //  从旧的fiber提取出上次的cleanup执行
+
+    fiber?.alternate?.effectHooks?.forEach((hook) => {
+      if (hook.deps?.length > 0) {
+        hook.cleanup?.();
+      }
+    });
+
+    runCleanup(fiber.child);
+    runCleanup(fiber.sibling);
+  };
+
+  runCleanup(wipRoot);
+  runCallback(wipRoot);
 }
 
 //  =========== render ===========
@@ -315,6 +375,12 @@ function updateHostComponent(fiber) {
  * @param {*} fiber
  */
 function updateFunctionComponent(fiber) {
+  //*  初始化hook相关
+  wipFiber = fiber;
+  stateHookIndex = 0;
+  wipFiber.stateHooks = [];
+  wipFiber.effectHooks = [];
+
   const children = [fiber.type(fiber.props)];
 
   reconcileChildren(fiber, children);
@@ -384,6 +450,52 @@ function reconcileChildren(fiber, nodes) {
   });
 }
 
+//  =========== hooks ===========
+
+export function useState(initial) {
+  const oldHook = wipFiber.alternate?.stateHooks?.[stateHookIndex];
+
+  const hook = {
+    //  记录状态值
+    state: oldHook ? oldHook.state : initial,
+    //  把同时调用多次setState的记录下来，然后计算出最后的结果
+    queue: [],
+  };
+
+  //  将上一次hook中的queue取出来执行
+  const actions = oldHook?.queue || [];
+  actions.forEach((action) => {
+    hook.state = action(hook.state);
+  });
+
+  const setState = (action) => {
+    hook.queue.push(action);
+
+    //  设置一下wipRoot和nextUnitOfWork即可等待他更新了
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    };
+    nextUnitOfWork = wipRoot;
+    deletions = [];
+  };
+
+  wipFiber.stateHooks.push(hook);
+  stateHookIndex++;
+
+  return [hook.state, setState];
+}
+
+export function useEffect(callback, deps) {
+  const hook = {
+    callback,
+    deps,
+    cleanup: null,
+  };
+  wipFiber.effectHooks.push(hook);
+}
+
 //  =========== 全局变量 ===========
 
 //  下一个工作单元 (fiber结构)
@@ -397,6 +509,12 @@ let currentRoot = null;
 
 //  记录需要移除的fiber
 let deletions = [];
+
+//  当前执行中的fiber
+let wipFiber = null;
+
+//  当前执行中的fiber 对应的useState索引，因为useState可能会声明多个
+let stateHookIndex = null;
 
 requestIdleCallback(workLoop);
 

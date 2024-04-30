@@ -3,23 +3,20 @@
 layout: home
 
 hero:
-  name: "Learn mini-react"
-  text: "A site used for learning mini-react"
-  tagline: My great project tagline
+  name: "Simple React"
+  text: "一起来做个simple react吧"
+  tagline: build your own simple react
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
-    - theme: alt
-      text: API Examples
-      link: /api-examples
+      text: 开始学习
+      link: /start
 
 features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: 🚀 jsx
+    details: 使用vite来编译jsx
+  - title: 🍀 fiber
+    details: 实现了可中断
+  - title: ⛓️ hooks
+    details: 实现了useState、useEffect
 ---
 

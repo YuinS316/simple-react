@@ -7,6 +7,9 @@ export function App() {
     <div className="test-cls-app">
       <p onClick={handleClick}>123</p>
       <div>child</div>
+      <div>
+        <Foo></Foo>
+      </div>
     </div>
   );
 }

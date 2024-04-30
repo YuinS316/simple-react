@@ -21,6 +21,7 @@ export default defineConfig({
           { text: "统一提交", link: "/commitRoot" },
           { text: "调和", link: "/reconciliation" },
           { text: "函数式组件", link: "/functionComponent" },
+          { text: "hook", link: "/hook" },
         ],
       },
     ],
